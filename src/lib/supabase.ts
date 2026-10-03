@@ -1,7 +1,7 @@
 import 'expo-sqlite/localStorage/install';
 
 import { createClient } from '@supabase/supabase-js';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const key = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -17,7 +17,8 @@ export const supabase = createClient(url || 'https://not-configured.invalid', ke
     storage: localStorage,
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: false,
+    // On the website, email confirmation links land on the app with the session in the URL.
+    detectSessionInUrl: Platform.OS === 'web',
   },
 });
 

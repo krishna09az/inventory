@@ -42,6 +42,13 @@ Do **not** run `npm run reset-project` (it's the starter template's script): it 
 - Cloud builds don't get `.env.local` (git-ignored); the `EXPO_PUBLIC_SUPABASE_*` values live in EAS env vars (`eas env:list preview`). Keep them in sync with `.env.local`.
 - The Android keystore was generated in the cloud and is stored on EAS (no local `keytool`). Use cloud builds: `eas build --local` isn't supported on native Windows (only macOS/Linux/WSL).
 
+## Website (EAS Hosting)
+
+- Production: https://kraftbling-inventory.expo.app (dev domain `kraftbling-inventory`). Deploy = `npx expo export --platform web` then `npx eas-cli@latest deploy --prod --non-interactive`. The export bakes in `EXPO_PUBLIC_*` from `.env.local` (local export, unlike EAS Build).
+- Works without COOP/COEP headers (`crossOriginIsolated` is false) because the app only uses async expo-sqlite APIs. EAS Hosting serves `.wasm` as `application/wasm` and falls back to `index.html` for deep links.
+- `detectSessionInUrl` is on for web only, so Supabase email-confirmation links (Site URL = the production URL) sign the user straight in.
+- To check a web build without the browser extension, drive headless Chrome over the DevTools protocol (Node's global `WebSocket`) and read console errors plus `document.body.innerText`. The sign-in screen rendering means SQLite initialised, since `SQLiteProvider` gates rendering on `migrateDbIfNeeded`.
+
 ## Web (browser testing)
 
 expo-sqlite on web is alpha and needs specific config:

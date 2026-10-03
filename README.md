@@ -62,6 +62,17 @@ npx expo start --tunnel      # scan the QR code / open the exp:// URL in Expo Go
 
 In a browser: open http://localhost:8081 once the dev server is running. Web support for the local database is experimental.
 
+## Website
+
+The same app runs in the browser at **https://kraftbling-inventory.expo.app**: same sign-in, same data. It's hosted on [EAS Hosting](https://docs.expo.dev/eas/hosting/introduction/). To publish changes:
+
+```bash
+npx expo export --platform web      # builds dist/ (reads the Supabase keys from .env.local)
+npx eas-cli@latest deploy --prod
+```
+
+Each browser keeps its own local copy of the data, and signing out clears it. The browser database (expo-sqlite on web) is experimental in Expo.
+
 ## Android APK (private distribution)
 
 Installable APKs are built in the cloud with [EAS Build](https://docs.expo.dev/build/introduction/) and shared by link, without the Play Store.
