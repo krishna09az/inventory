@@ -26,8 +26,8 @@ type Params = { itemId: string; type?: MovementType; id?: string };
 export default function MovementScreen() {
   const db = useSQLiteContext();
   const params = useLocalSearchParams<Params>();
-  const itemId = Number(params.itemId);
-  const movementId = params.id ? Number(params.id) : undefined;
+  const itemId = params.itemId;
+  const movementId = params.id || undefined;
   const [loaded, setLoaded] = useState<{ item: Item; movement: Movement | null } | null>(null);
 
   useEffect(() => {

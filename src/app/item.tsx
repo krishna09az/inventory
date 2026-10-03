@@ -14,7 +14,7 @@ import { parseCount, parsePrice, todayIso } from '@/utils/format';
 export default function ItemScreen() {
   const db = useSQLiteContext();
   const { id } = useLocalSearchParams<{ id?: string }>();
-  const itemId = id ? Number(id) : undefined;
+  const itemId = id || undefined;
   const [item, setItem] = useState<Item | null | undefined>(itemId === undefined ? null : undefined);
 
   useEffect(() => {

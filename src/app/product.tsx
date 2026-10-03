@@ -18,6 +18,7 @@ import {
   type MovementType,
 } from '@/db/inventory';
 import { useTheme } from '@/hooks/use-theme';
+import { useSync } from '@/providers/sync-provider';
 import { formatDate, formatMoney } from '@/utils/format';
 
 type Data = { item: Item; totals: ItemTotals; movements: Movement[] };
@@ -27,16 +28,22 @@ export default function ProductScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const itemId = Number(id);
+  const itemId = id;
+  const { dataVersion } = useSync();
   const [data, setData] = useState<Data | null>(null);
 
+  // dataVersion: reload when a sync brings in changes from the cloud.
   const refresh = useCallback(() => {
     Promise.all([getItem(db, itemId), getItemTotals(db, itemId), listMovements(db, itemId)]).then(
       ([item, totals, movements]) => {
-        if (item) setData({ item, totals, movements });
+        if (item) {
+          setData({ item, totals, movements });
+        } else if (router.canGoBack()) {
+          router.back(); // deleted (possibly on another device)
+        }
       }
     );
-  }, [db, itemId]);
+  }, [db, itemId, dataVersion]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useFocusEffect(refresh);
 
@@ -48,7 +55,7 @@ export default function ProductScreen() {
   const avgPrice = totals.pricedUnits > 0 ? totals.purchaseValue / totals.pricedUnits : null;
 
   const addMovement = (type: MovementType) =>
-    router.push({ pathname: '/movement', params: { itemId: String(item.id), type } });
+    router.push({ pathname: '/movement', params: { itemId: item.id, type } });
 
   return (
     <ThemedView style={styles.container}>
@@ -57,7 +64,7 @@ export default function ProductScreen() {
           title: item.name,
           headerRight: () => (
             <Pressable
-              onPress={() => router.push({ pathname: '/item', params: { id: String(item.id) } })}
+              onPress={() => router.push({ pathname: '/item', params: { id: item.id } })}
               hitSlop={12}>
               <ThemedText style={{ color: theme.tint, fontWeight: 600 }}>Edit</ThemedText>
             </Pressable>
@@ -67,7 +74,7 @@ export default function ProductScreen() {
 
       <FlatList
         data={movements}
-        keyExtractor={(m) => String(m.id)}
+        keyExtractor={(m) => m.id}
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing.four }]}
         ListHeaderComponent={
@@ -165,7 +172,7 @@ function MovementRow({ movement: m }: { movement: Movement }) {
 
   return (
     <Pressable
-      onPress={() => router.push({ pathname: '/movement', params: { itemId: String(m.itemId), id: String(m.id) } })}
+      onPress={() => router.push({ pathname: '/movement', params: { itemId: m.itemId, id: m.id } })}
       style={({ pressed }) => [
         styles.row,
         { backgroundColor: pressed ? theme.backgroundSelected : theme.backgroundElement },

@@ -1,7 +1,7 @@
 import { router, Stack, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, FlatList, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -9,21 +9,24 @@ import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { isLowStock, listItems, type Item } from '@/db/inventory';
 import { useTheme } from '@/hooks/use-theme';
+import { useAuth } from '@/providers/auth-provider';
+import { useSync } from '@/providers/sync-provider';
 
 export default function InventoryScreen() {
   const db = useSQLiteContext();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const { dataVersion } = useSync();
   const [items, setItems] = useState<Item[]>([]);
   const [query, setQuery] = useState('');
   const [lowOnly, setLowOnly] = useState(false);
 
+  // dataVersion: reload when a sync brings in changes from the cloud.
   const refresh = useCallback(() => {
     listItems(db).then(setItems);
-  }, [db]);
+  }, [db, dataVersion]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useFocusEffect(refresh);
-
 
   const q = query.trim().toLowerCase();
   const visible = items.filter(
@@ -38,6 +41,7 @@ export default function InventoryScreen() {
     <ThemedView style={styles.container}>
       <Stack.Screen
         options={{
+          headerLeft: () => <AccountButton />,
           headerRight: () => (
             <Pressable onPress={() => router.push('/item')} hitSlop={12}>
               <ThemedText style={{ color: theme.tint, fontWeight: 600 }}>Add</ThemedText>
@@ -48,7 +52,7 @@ export default function InventoryScreen() {
 
       <FlatList
         data={visible}
-        keyExtractor={(item) => String(item.id)}
+        keyExtractor={(item) => item.id}
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing.four }]}
@@ -70,6 +74,7 @@ export default function InventoryScreen() {
               autoCorrect={false}
               style={[styles.search, { backgroundColor: theme.backgroundElement, color: theme.text }]}
             />
+            <SyncStatusLine />
           </View>
         }
         ListEmptyComponent={
@@ -87,6 +92,80 @@ export default function InventoryScreen() {
         renderItem={({ item }) => <ItemRow item={item} />}
       />
     </ThemedView>
+  );
+}
+
+/** Only visible when something needs attention: syncing, changes waiting, or an error. */
+function SyncStatusLine() {
+  const theme = useTheme();
+  const { state, pending, error } = useSync();
+  let text: string | null = null;
+  if (state === 'syncing') {
+    text = 'Syncing…';
+  } else if (state === 'error') {
+    text =
+      pending > 0
+        ? `Offline: ${pending} change${pending === 1 ? '' : 's'} saved on this phone, will upload when back online.`
+        : `Couldn’t sync: ${error}`;
+  } else if (pending > 0) {
+    text = `${pending} change${pending === 1 ? '' : 's'} waiting to upload…`;
+  }
+  if (!text) return null;
+  return (
+    <ThemedText type="small" style={{ color: state === 'error' ? theme.warning : theme.textSecondary }}>
+      {text}
+    </ThemedText>
+  );
+}
+
+function AccountButton() {
+  const theme = useTheme();
+  const { session } = useAuth();
+  const { lastSyncedAt, syncNow, prepareSignOut, signOut } = useSync();
+  const email = session?.user.email ?? '';
+
+  const confirm = (title: string, message: string, action: string, onConfirm: () => void) => {
+    if (Platform.OS === 'web') {
+      if (window.confirm(`${title}\n\n${message}`)) onConfirm();
+      return;
+    }
+    Alert.alert(title, message, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: action, style: 'destructive', onPress: onConfirm },
+    ]);
+  };
+
+  const startSignOut = async () => {
+    const unsynced = await prepareSignOut();
+    if (unsynced > 0) {
+      confirm(
+        'Changes not uploaded',
+        `${unsynced} change${unsynced === 1 ? " hasn't" : "s haven't"} reached the cloud yet (no connection?). Signing out now will lose ${unsynced === 1 ? 'it' : 'them'}.`,
+        'Sign out anyway',
+        signOut
+      );
+    } else {
+      signOut();
+    }
+  };
+
+  const open = () => {
+    const synced = lastSyncedAt ? `Last synced ${new Date(lastSyncedAt).toLocaleTimeString()}` : 'Not synced yet';
+    if (Platform.OS === 'web') {
+      if (window.confirm(`Signed in as ${email}\n${synced}\n\nSign out?`)) startSignOut();
+      return;
+    }
+    Alert.alert(email, synced, [
+      { text: 'Sync now', onPress: () => syncNow() },
+      { text: 'Sign out', style: 'destructive', onPress: startSignOut },
+      { text: 'Close', style: 'cancel' },
+    ]);
+  };
+
+  return (
+    <Pressable onPress={open} hitSlop={12}>
+      <ThemedText style={{ color: theme.tint }}>Account</ThemedText>
+    </Pressable>
   );
 }
 
@@ -114,7 +193,7 @@ function ItemRow({ item }: { item: Item }) {
 
   return (
     <Pressable
-      onPress={() => router.push({ pathname: '/product', params: { id: String(item.id) } })}
+      onPress={() => router.push({ pathname: '/product', params: { id: item.id } })}
       style={({ pressed }) => [
         styles.row,
         { backgroundColor: pressed ? theme.backgroundSelected : theme.backgroundElement },
